@@ -1,0 +1,15 @@
+name: Keep Alive Supabase
+
+on:
+  schedule:
+    - cron: '30 * * * *' # Chạy tự động mỗi 1 giờ (vào phút thứ 30)
+  workflow_dispatch:      # Nút chạy thủ công trong tab Actions
+
+jobs:
+  ping-app:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Application
+        run: |
+          curl -I -s -L https://quanlytd.vercel.app
+          echo "Heartbeat sent to https://quanlytd.vercel.app at $(date)"

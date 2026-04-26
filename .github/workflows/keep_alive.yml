@@ -1,4 +1,4 @@
-name: Keep Alive Supabase
+name: Keep Alive Supabase quanlytd
 
 on:
   schedule:

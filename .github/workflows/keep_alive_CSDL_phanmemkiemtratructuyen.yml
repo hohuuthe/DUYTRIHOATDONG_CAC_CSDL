@@ -3,14 +3,18 @@ name: Keep Alive Supabase CSDL PHAN MEM KIEM TRA TRUC TUYEN
 on:
   schedule:
     - cron: '0 * * * *' # Chạy tự động mỗi 1 giờ (phút thứ 0)
-  workflow_dispatch:     # Cho phép bạn bấm nút chạy thủ công để kiểm tra
+  workflow_dispatch:      # Cho phép bạn bấm nút chạy thủ công để kiểm tra
 
 jobs:
-  ping-site:
+  ping-database:
     runs-on: ubuntu-latest
     steps:
-      - name: Access Website to Trigger Heartbeat
+      - name: Insert Time into Supabase DB directly
         run: |
-          # Gửi request đến trang web của bạn
-          curl -s -L https://kiemtratructuyen.vercel.app > /dev/null
-          echo "Đã truy cập https://kiemtratructuyen.vercel.app thành công lúc $(date)"
+          # Gửi REST API Request POST thẳng vào DataBase tới bảng 'duytricsdl' kèm thời gian chuẩn Việt Nam
+          curl -X POST "https://jfmblflvhrwzlzebpvjl.supabase.co/rest/v1/duytricsdl" \
+            -H "apikey: sb_publishable_fMfzYhcZj2UOF8jLSRqVbw_48dCsaiS" \
+            -H "Authorization: Bearer sb_publishable_fMfzYhcZj2UOF8jLSRqVbw_48dCsaiS" \
+            -H "Content-Type: application/json" \
+            -d "{\"thoigian\": \"$(TZ='Asia/Ho_Chi_Minh' date +'%Y-%m-%dT%H:%M:%S+07:00')\"}"
+          echo "Đã chủ động nối máy và ghi nhật ký thời gian lúc: $(TZ='Asia/Ho_Chi_Minh' date)"

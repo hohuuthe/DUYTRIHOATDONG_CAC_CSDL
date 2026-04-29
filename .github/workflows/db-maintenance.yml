@@ -1,0 +1,56 @@
+name: Duy Tri CSDL Supabase
+
+on:
+  schedule:
+    # Chạy tự động mỗi 1 giờ (vào phút thứ 0 của mỗi giờ)
+    - cron: '0 * * * *'
+  workflow_dispatch: # Cho phép bạn bấm nút "Run workflow" thủ công để kiểm tra
+
+jobs:
+  maintain:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cap nhat gia tri cot 'so'
+        run: |
+          # 1. Thiet lap thong so ket noi (Lay tu ung dung)
+          SUPABASE_URL="https://gziygcguktozutpednsq.supabase.co"
+          SUPABASE_KEY="sb_publishable_jUZZ46kQJfnm6hrskFCa7Q_MfQn3Gnk"
+          TABLE_NAME="duytricsdl"
+
+          echo "--- Bat dau quy trinh cap nhat CSDL ---"
+
+          # 2. Lay gia tri hien tai cua dong dau tien trong bang
+          # Su dung curl de goi REST API cua Supabase
+          RESPONSE=$(curl -s -X GET "$SUPABASE_URL/rest/v1/$TABLE_NAME?select=id,so&limit=1" \
+            -H "apikey: $SUPABASE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_KEY")
+
+          echo "Du lieu hien tai: $RESPONSE"
+
+          # 3. Trich xuat ID va gia tri 'so' hien tai bang jq
+          ID=$(echo $RESPONSE | jq -r '.[0].id')
+          CURRENT_SO=$(echo $RESPONSE | jq -r '.[0].so')
+
+          # Kiem tra neu khong tim thay du lieu
+          if [ "$ID" == "null" ] || [ -z "$ID" ]; then
+            echo "Loi: Khong tim thay dong nao trong bang $TABLE_NAME de cap nhat."
+            exit 1
+          fi
+
+          # 4. Tinh toan gia tri moi (tang len 1)
+          NEW_SO=$((CURRENT_SO + 1))
+          echo "ID: $ID | Gia tri cu: $CURRENT_SO -> Gia tri moi: $NEW_SO"
+
+          # 5. Gui yeu cau PATCH de cap nhat lai CSDL
+          UPDATE_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X PATCH "$SUPABASE_URL/rest/v1/$TABLE_NAME?id=eq.$ID" \
+            -H "apikey: $SUPABASE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_KEY" \
+            -H "Content-Type: application/json" \
+            -d "{\"so\": $NEW_SO}")
+
+          if [ "$UPDATE_STATUS" == "204" ] || [ "$UPDATE_STATUS" == "200" ]; then
+            echo "--- Cap nhat thanh cong! (HTTP $UPDATE_STATUS) ---"
+          else
+            echo "--- Loi khi cap nhat! (Ma loi HTTP: $UPDATE_STATUS) ---"
+            exit 1
+          fi

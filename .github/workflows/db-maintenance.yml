@@ -1,56 +1,87 @@
-name: Duy Tri CSDL Supabase
+name: Duy tri va Cap nhat CSDL Supabase
 
 on:
   schedule:
-    # Chạy tự động mỗi 1 giờ (vào phút thứ 0 của mỗi giờ)
+    # Chạy tự động mỗi giờ một lần (vào phút thứ 0)
     - cron: '0 * * * *'
-  workflow_dispatch: # Cho phép bạn bấm nút "Run workflow" thủ công để kiểm tra
+  workflow_dispatch: # Cho phép bạn bấm nút chạy thử thủ công trên GitHub
 
 jobs:
-  maintain:
+  update-database:
     runs-on: ubuntu-latest
     steps:
-      - name: Cap nhat gia tri cot 'so'
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Supabase Client
+        run: npm install @supabase/supabase-js
+
+      - name: Chay script cap nhat
         run: |
-          # 1. Thiet lap thong so ket noi (Lay tu ung dung)
-          SUPABASE_URL="https://gziygcguktozutpednsq.supabase.co"
-          SUPABASE_KEY="sb_publishable_jUZZ46kQJfnm6hrskFCa7Q_MfQn3Gnk"
-          TABLE_NAME="duytricsdl"
+          cat << 'EOF' > update_script.js
+          const { createClient } = require('@supabase/supabase-js');
 
-          echo "--- Bat dau quy trinh cap nhat CSDL ---"
+          // Thông tin kết nối lấy từ ứng dụng của bạn
+          const supabaseUrl = 'https://gziygcguktozutpednsq.supabase.co';
+          const supabaseKey = 'sb_publishable_jUZZ46kQJfnm6hrskFCa7Q_MfQn3Gnk';
 
-          # 2. Lay gia tri hien tai cua dong dau tien trong bang
-          # Su dung curl de goi REST API cua Supabase
-          RESPONSE=$(curl -s -X GET "$SUPABASE_URL/rest/v1/$TABLE_NAME?select=id,so&limit=1" \
-            -H "apikey: $SUPABASE_KEY" \
-            -H "Authorization: Bearer $SUPABASE_KEY")
+          const supabase = createClient(supabaseUrl, supabaseKey);
 
-          echo "Du lieu hien tai: $RESPONSE"
+          async function main() {
+            console.log('--- Bắt đầu tiến trình cập nhật CSDL ---');
+            try {
+              // 1. Kiểm tra sự tồn tại của bảng và dữ liệu
+              const { data, error: fetchError } = await supabase
+                .from('duytricsdl')
+                .select('*')
+                .limit(1);
 
-          # 3. Trich xuat ID va gia tri 'so' hien tai bang jq
-          ID=$(echo $RESPONSE | jq -r '.[0].id')
-          CURRENT_SO=$(echo $RESPONSE | jq -r '.[0].so')
+              if (fetchError) {
+                console.error('Lỗi khi truy vấn bảng duytricsdl:', fetchError.message);
+                console.log('Gợi ý: Hãy đảm bảo bạn đã tạo bảng "duytricsdl" trong Supabase SQL Editor.');
+                process.exit(1);
+              }
 
-          # Kiem tra neu khong tim thay du lieu
-          if [ "$ID" == "null" ] || [ -z "$ID" ]; then
-            echo "Loi: Khong tim thay dong nao trong bang $TABLE_NAME de cap nhat."
-            exit 1
-          fi
+              if (!data || data.length === 0) {
+                // 2. Nếu chưa có dòng nào, tạo mới dòng đầu tiên
+                console.log('Chưa có dữ liệu, đang tạo dòng mới...');
+                const { error: insertError } = await supabase
+                  .from('duytricsdl')
+                  .insert([{ so: 1 }]);
+                
+                if (insertError) {
+                  console.error('Lỗi khi chèn dữ liệu mới:', insertError.message);
+                  process.exit(1);
+                }
+                console.log('Đã tạo thành công dòng đầu tiên với so = 1');
+              } else {
+                // 3. Nếu đã có dữ liệu, tăng giá trị cột so lên 1
+                const record = data[0];
+                const currentSo = parseInt(record.so || 0);
+                const newSo = currentSo + 1;
+                
+                console.log(`Tìm thấy ID: ${record.id}, Giá trị hiện tại: ${currentSo}`);
 
-          # 4. Tinh toan gia tri moi (tang len 1)
-          NEW_SO=$((CURRENT_SO + 1))
-          echo "ID: $ID | Gia tri cu: $CURRENT_SO -> Gia tri moi: $NEW_SO"
+                const { error: updateError } = await supabase
+                  .from('duytricsdl')
+                  .update({ so: newSo })
+                  .eq('id', record.id);
 
-          # 5. Gui yeu cau PATCH de cap nhat lai CSDL
-          UPDATE_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -X PATCH "$SUPABASE_URL/rest/v1/$TABLE_NAME?id=eq.$ID" \
-            -H "apikey: $SUPABASE_KEY" \
-            -H "Authorization: Bearer $SUPABASE_KEY" \
-            -H "Content-Type: application/json" \
-            -d "{\"so\": $NEW_SO}")
+                if (updateError) {
+                  console.error('Lỗi khi cập nhật giá trị:', updateError.message);
+                  process.exit(1);
+                }
+                console.log(`Cập nhật thành công! Giá trị mới: ${newSo}`);
+              }
+            } catch (err) {
+              console.error('Lỗi hệ thống bất ngờ:', err.message);
+              process.exit(1);
+            }
+            console.log('--- Tiến trình hoàn tất ---');
+          }
 
-          if [ "$UPDATE_STATUS" == "204" ] || [ "$UPDATE_STATUS" == "200" ]; then
-            echo "--- Cap nhat thanh cong! (HTTP $UPDATE_STATUS) ---"
-          else
-            echo "--- Loi khi cap nhat! (Ma loi HTTP: $UPDATE_STATUS) ---"
-            exit 1
-          fi
+          main();
+          EOF
+          node update_script.js
